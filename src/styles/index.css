@@ -1,0 +1,17 @@
+@import './gradient-btn.css';
+
+@import 'tailwindcss';
+
+/* SearchBar dropdown styling */
+.search-dropdown {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	right: 0;
+	background: white;
+	border: 1px solid #eee;
+	z-index: 100;
+	box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+	max-height: 300px;
+	overflow-y: auto;
+}

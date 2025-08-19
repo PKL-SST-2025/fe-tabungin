@@ -1,0 +1,11 @@
+/* Gradient button style for attractive action buttons */
+.gradient-btn {
+  background-image: linear-gradient(90deg, #38b2ac 0%, #4299e1 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(66, 153, 225, 0.15);
+  border: none;
+}
+.gradient-btn:hover {
+  background-image: linear-gradient(90deg, #4299e1 0%, #38b2ac 100%);
+  box-shadow: 0 4px 16px rgba(66, 153, 225, 0.25);
+}
