@@ -14,7 +14,7 @@ Kebutuhan utama pengguna:
 Menabung untuk meraih impian yang kita mau
 
 🔗 Live Website
-[fe-tabungin.vercel.app](https://tabunginn.vercel.app/)
+[fe-tabungin.vercel.app](https://fe-tabungin.vercel.app/)
 
 🎨 Figma Design
 https://www.figma.com/design/wjtNqSKSAeTD3NblJVeteY/Tabungin?node-id=0-1&t=Q29eWviCej4uNBrK-1
