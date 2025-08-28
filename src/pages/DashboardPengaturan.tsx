@@ -14,10 +14,12 @@ type UserProfile = {
   profileImage: string | null;
 };
 
-  // Jangan simpan userProfile di localStorage, gunakan userStore dan backend saja
+type CropData = {
+  x: number;
+  y: number;
+};
 
 const PengaturanProfile: Component = () => {
-  // Route guard: Only allow user to access dashboard pages
   // Route guard: Only allow user to access dashboard pages
   if (userStore.user.role === 'user') {
     const allowedPaths = ['/dashboard', '/dashboardpengguna', '/dashboardpengaturan'];
@@ -39,10 +41,26 @@ const PengaturanProfile: Component = () => {
   const [posisiJabatan, setPosisiJabatan] = createSignal('');
   const [profileImage, setProfileImage] = createSignal<string | null>(null);
 
+  // Modal states
+  const [isModalOpen, setIsModalOpen] = createSignal(false);
+  const [isCropModalOpen, setIsCropModalOpen] = createSignal(false);
+  const [tempImage, setTempImage] = createSignal<string | null>(null);
+  
+  // Simplified crop states - only position
+  const [cropData, setCropData] = createSignal<CropData>({
+    x: 0,
+    y: 0
+  });
+  const [isDragging, setIsDragging] = createSignal(false);
+  const [dragStart, setDragStart] = createSignal({ x: 0, y: 0 });
+
   const [isSaving, setIsSaving] = createSignal(false);
   const [isLoading, setIsLoading] = createSignal(false);
   const [saveMessage, setSaveMessage] = createSignal('');
   const [originalData, setOriginalData] = createSignal<UserProfile | null>(null);
+
+  // Fixed crop size
+  const CROP_SIZE = 200;
 
   createEffect(() => {
     setIsLoading(true);
@@ -80,9 +98,9 @@ const PengaturanProfile: Component = () => {
         const userStoreData = userStore.user;
         setNamaLengkap(userStoreData.name || '');
         setEmail(userStoreData.email || '');
-  setNomorTelepon(userStoreData.nomorTelepon || '');
-  setAlamat(userStoreData.alamat || '');
-  setPosisiJabatan(userStoreData.posisiJabatan || '');
+        setNomorTelepon(userStoreData.nomorTelepon || '');
+        setAlamat(userStoreData.alamat || '');
+        setPosisiJabatan(userStoreData.posisiJabatan || '');
         setProfileImage(userStoreData.avatar);
         setOriginalData({
           namaLengkap: userStoreData.name || '',
@@ -109,15 +127,131 @@ const PengaturanProfile: Component = () => {
     );
   };
 
+  const cropImage = (imageUrl: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d')!;
+      const img = new Image();
+      
+      img.onload = () => {
+        const outputSize = 300;
+        canvas.width = outputSize;
+        canvas.height = outputSize;
+        
+        // Calculate dimensions to crop to center square
+        const size = Math.min(img.naturalWidth, img.naturalHeight);
+        const startX = (img.naturalWidth - size) / 2;
+        const startY = (img.naturalHeight - size) / 2;
+        
+        // Draw the center square portion of the image
+        ctx.drawImage(
+          img,
+          startX, startY, size, size,
+          0, 0, outputSize, outputSize
+        );
+        
+        resolve(canvas.toDataURL('image/jpeg', 0.9));
+      };
+      
+      img.src = imageUrl;
+    });
+  };
+
   const handleImageUpload = (event: Event) => {
     const target = event.target as HTMLInputElement;
     const file = target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (e) => setProfileImage(e.target?.result as string);
+      reader.onload = (e) => {
+        const imageUrl = e.target?.result as string;
+        setTempImage(imageUrl);
+        
+        // Reset crop data to center (not used anymore, just for consistency)
+        setCropData({
+          x: 0,
+          y: 0
+        });
+        
+        setIsCropModalOpen(true);
+      };
       reader.readAsDataURL(file);
     }
   };
+
+  // Simplified crop handlers - removed since we're not using interactive crop anymore
+
+  const handleCropConfirm = async () => {
+    if (tempImage()) {
+      const croppedImage = await cropImage(tempImage()!);
+      setProfileImage(croppedImage);
+      setIsCropModalOpen(false);
+      setTempImage(null);
+    }
+  };
+
+  const handleCropCancel = () => {
+    setIsCropModalOpen(false);
+    setTempImage(null);
+  };
+
+  // Handle zoom change - this will scale the image
+  const handleZoomChange = (newScale: number) => {
+    setCropData(prev => ({ ...prev, scale: newScale }));
+  };
+
+  // Fungsi untuk menghapus foto
+  const handleDeleteImage = () => {
+    if (confirm('Apakah Anda yakin ingin menghapus foto profil?')) {
+      setProfileImage(null);
+      setSaveMessage('Foto profil dihapus. Jangan lupa simpan perubahan.');
+      setTimeout(() => setSaveMessage(''), 3000);
+    }
+  };
+
+  // Fungsi untuk membuka modal foto
+  const openImageModal = () => {
+    if (profileImage()) {
+      setIsModalOpen(true);
+    }
+  };
+
+  // Fungsi untuk menutup modal
+  const closeImageModal = () => {
+    setIsModalOpen(false);
+  };
+
+  // Handle click outside modal
+  const handleModalClick = (e: MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      closeImageModal();
+    }
+  };
+
+  // Handle ESC key
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      if (isModalOpen()) {
+        closeImageModal();
+      }
+      if (isCropModalOpen()) {
+        handleCropCancel();
+      }
+    }
+  };
+
+  // Add event listener for ESC key
+  createEffect(() => {
+    if (isModalOpen() || isCropModalOpen()) {
+      document.addEventListener('keydown', handleKeyDown);
+    } else {
+      document.removeEventListener('keydown', handleKeyDown);
+    }
+    
+    // Cleanup on component unmount
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  });
 
   const getCurrentProfileData = (): UserProfile => ({
     namaLengkap: namaLengkap(),
@@ -143,7 +277,6 @@ const PengaturanProfile: Component = () => {
   };
 
   const handleSimpanPerubahan = async () => {
-  // Jangan reset field sebelum backend response, update hanya setelah sukses
     const validation = validateForm();
     if (!validation.isValid) {
       setSaveMessage(`Error: ${validation.errors.join(', ')}`);
@@ -180,7 +313,6 @@ const PengaturanProfile: Component = () => {
       }
       if (res.ok && result && typeof result === 'object' && 'success' in result && result.success && 'data' in result && result.data && typeof result.data === 'object') {
         const data = result.data as { full_name?: string; email?: string; avatar?: string | null };
-        // Refresh userStore dengan data terbaru dari backend
         // Use a single typed data variable for all accesses
         const userData = result.data as {
           full_name?: string;
@@ -268,20 +400,52 @@ const PengaturanProfile: Component = () => {
                 <h2 class="text-xl font-semibold text-gray-800 mb-6">Profil Administrator</h2>
                 <div class="flex items-center mb-6">
                   <div class="relative">
-                    <div class="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center text-white text-xl font-bold">
+                    <div 
+                      class={`w-16 h-16 bg-green-600 rounded-full flex items-center justify-center text-white text-xl font-bold ${
+                        profileImage() ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''
+                      }`}
+                      onClick={openImageModal}
+                      title={profileImage() ? 'Klik untuk melihat foto' : ''}
+                    >
                       {profileImage() ? (
-                        <img src={profileImage()!} alt="Profile" class="w-full h-full rounded-full object-cover" />
+                        <img 
+                          src={profileImage()!} 
+                          alt="Profile" 
+                          class="w-full h-full rounded-full object-cover hover:opacity-90 transition-opacity" 
+                        />
                       ) : (
                         'U'
                       )}
                     </div>
+                    {/* Icon untuk menandakan foto bisa diklik */}
+                    {profileImage() && (
+                      <div class="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                        <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                        </svg>
+                      </div>
+                    )}
                   </div>
                   <div class="ml-4">
-                    <label class="inline-block bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md cursor-pointer">
-                      Ubah Foto Profil
-                      <input type="file" accept="image/*" class="hidden" onChange={handleImageUpload} />
-                    </label>
-                    <p class="text-sm text-gray-500 mt-1">Format: JPG, PNG. Maksimal 2MB</p>
+                    <div class="flex gap-2 mb-2">
+                      <label class="inline-block bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md cursor-pointer text-sm font-medium transition-colors">
+                        📁 Pilih Foto
+                        <input type="file" accept="image/*" class="hidden" onChange={handleImageUpload} />
+                      </label>
+                      {profileImage() && (
+                        <button
+                          onClick={handleDeleteImage}
+                          class="inline-block bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                        >
+                          🗑️ Hapus
+                        </button>
+                      )}
+                    </div>
+                    <p class="text-sm text-gray-500">Format: JPG, PNG. Maksimal 2MB</p>
+                    {profileImage() && (
+                      <p class="text-xs text-blue-600 mt-1">💡 Klik foto untuk melihat ukuran penuh</p>
+                    )}
                   </div>
                 </div>
                 <div class="space-y-4">
@@ -402,6 +566,123 @@ const PengaturanProfile: Component = () => {
           </div>
         </main>
       </div>
+
+      {/* Simplified Crop Modal - Preview Only */}
+      {isCropModalOpen() && tempImage() && (
+        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full">
+            <div class="p-6 border-b border-gray-200">
+              <h3 class="text-lg font-semibold text-gray-800">Preview Foto Profil</h3>
+              <p class="text-sm text-gray-600 mt-1">Foto akan otomatis dipotong menjadi lingkaran</p>
+            </div>
+            
+            <div class="p-6">
+              <div class="flex flex-col items-center space-y-6">
+                {/* Original Image Preview */}
+                <div class="w-64 h-64 bg-gray-100 rounded-lg overflow-hidden border border-gray-300">
+                  <img 
+                    src={tempImage()!} 
+                    alt="Original Preview" 
+                    class="w-full h-full object-cover"
+                  />
+                </div>
+                
+                {/* Arrow */}
+                <div class="text-gray-400">
+                  <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
+                  </svg>
+                </div>
+                
+                {/* Circular Preview */}
+                <div class="w-32 h-32 bg-gray-100 rounded-full overflow-hidden border-4 border-white shadow-lg">
+                  <img 
+                    src={tempImage()!} 
+                    alt="Profile Preview" 
+                    class="w-full h-full object-cover"
+                  />
+                </div>
+                
+                <p class="text-sm text-gray-600 text-center max-w-md">
+                  Foto akan dipotong secara otomatis untuk menjadi foto profil berbentuk lingkaran. 
+                  Pastikan wajah atau objek utama berada di tengah foto.
+                </p>
+              </div>
+            </div>
+            
+            <div class="flex gap-3 p-6 border-t border-gray-200">
+              <button
+                onClick={handleCropConfirm}
+                class="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                Gunakan Foto Ini
+              </button>
+              <button
+                onClick={handleCropCancel}
+                class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+                Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal untuk menampilkan foto profil - Background Blur seperti contoh */}
+      {isModalOpen() && profileImage() && (
+        <div 
+          class="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-md flex items-center justify-center z-50 p-4"
+          onClick={handleModalClick}
+        >
+          <div class="relative max-w-3xl max-h-full">
+            {/* Tombol close dengan background putih solid */}
+            <button
+              onClick={closeImageModal}
+              class="absolute -top-4 -right-4 bg-white hover:bg-gray-50 text-gray-600 hover:text-gray-800 transition-all duration-200 rounded-full p-2 shadow-lg z-10 border border-gray-200"
+              title="Tutup (ESC)"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
+            
+            {/* Container foto dengan background putih seperti modal */}
+            <div class="bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-200">
+              {/* Header modal */}
+              <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-lg font-semibold text-gray-800 text-center">
+                  Foto Profil
+                </h3>
+              </div>
+              
+              {/* Foto dalam container */}
+              <div class="p-6 flex justify-center items-center bg-gray-50">
+                <img 
+                  src={profileImage()!} 
+                  alt="Profile Preview" 
+                  class="max-w-full max-h-[60vh] object-contain rounded-xl shadow-md"
+                />
+              </div>
+              
+              {/* Footer info */}
+              <div class="px-6 py-4 bg-white border-t border-gray-200">
+                <p class="text-center text-sm font-medium text-gray-700">
+                  {namaLengkap() || 'Admin User'}
+                </p>
+                <p class="text-center text-xs text-gray-500 mt-1">
+                  Klik di luar area atau tekan ESC untuk menutup
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

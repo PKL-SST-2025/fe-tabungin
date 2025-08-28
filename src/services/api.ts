@@ -11,7 +11,6 @@ async function handleResponse(res: Response) {
     }
     return data;
   } else {
-    // Handle non-JSON responses
     const text = await res.text();
     if (!res.ok) {
       throw new Error(text || `HTTP error! status: ${res.status}`);
@@ -20,16 +19,17 @@ async function handleResponse(res: Response) {
   }
 }
 
-// Helper function untuk mendapatkan token
+// Helper function untuk mendapatkan token dan headers auth
 function getAuthHeaders() {
   const token = localStorage.getItem('token');
   return {
     "Content-Type": "application/json",
-    ...(token && { "Authorization": `Bearer ${token}` })
+    ...(token && { "Authorization": `Bearer ${token}` }),
   };
 }
 
-// Auth functions
+// ==== AUTH ====
+
 export async function login(email: string, password: string, isAdmin: boolean = false) {
   const res = await fetch(`${API_URL}/auth/login`, {
     method: "POST",
@@ -56,7 +56,8 @@ export async function getUserProfile() {
   return handleResponse(res);
 }
 
-// Password functions
+// ==== PASSWORD ====
+
 export async function forgotPassword(email: string) {
   const res = await fetch(`${API_URL}/password/forgot`, {
     method: "POST",
@@ -70,11 +71,7 @@ export async function resetPassword(resetToken: string, newPassword: string, con
   const res = await fetch(`${API_URL}/password/reset`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ 
-      reset_token: resetToken, 
-      new_password: newPassword, 
-      confirm_password: confirmPassword 
-    }),
+    body: JSON.stringify({ reset_token: resetToken, new_password: newPassword, confirm_password: confirmPassword }),
   });
   return handleResponse(res);
 }
@@ -83,15 +80,13 @@ export async function changePassword(oldPassword: string, newPassword: string) {
   const res = await fetch(`${API_URL}/password/change`, {
     method: "POST",
     headers: getAuthHeaders(),
-    body: JSON.stringify({ 
-      old_password: oldPassword, 
-      new_password: newPassword 
-    }),
+    body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
   });
   return handleResponse(res);
 }
 
-// Testimoni functions
+// ==== TESTIMONI ====
+
 export async function getTestimoni() {
   const res = await fetch(`${API_URL}/testimoni`, {
     method: "GET",
@@ -134,20 +129,13 @@ export async function deleteTestimoni(id: string) {
   return handleResponse(res);
 }
 
-// Savings functions
-export async function createSavingsTarget(name: string, targetAmount: number, icon?: string, iconColor?: string, targetDate?: string) {
-  const requestBody: any = { 
-    name, 
-    target_amount: targetAmount, 
-    icon, 
-    icon_color: iconColor
-  };
-  
-  // Only include target_date if provided, and format it correctly
-  if (targetDate) {
-    requestBody.target_date = targetDate.split('T')[0]; // Extract just the date part (YYYY-MM-DD)
-  }
+// ==== SAVINGS ====
 
+export async function createSavingsTarget(name: string, targetAmount: number, icon?: string, iconColor?: string, targetDate?: string) {
+  const requestBody: any = { name, target_amount: targetAmount, icon, icon_color: iconColor };
+  if (targetDate) {
+    requestBody.target_date = targetDate.split('T')[0]; // YYYY-MM-DD
+  }
   const res = await fetch(`${API_URL}/savings/targets`, {
     method: "POST",
     headers: getAuthHeaders(),
@@ -198,7 +186,8 @@ export async function addDepositToTarget(targetId: string, amount: number) {
   return handleResponse(res);
 }
 
-// Activities functions
+// ==== ACTIVITIES ====
+
 export async function getUserActivities(limit?: number) {
   const url = limit ? `${API_URL}/activities?limit=${limit}` : `${API_URL}/activities`;
   const res = await fetch(url, {
@@ -225,7 +214,8 @@ export async function getRecentActivities() {
   return handleResponse(res);
 }
 
-// Statistics functions
+// ==== STATISTICS ====
+
 export async function getUserStatistics() {
   const res = await fetch(`${API_URL}/statistics`, {
     method: "GET",
@@ -237,7 +227,6 @@ export async function getUserStatistics() {
 export async function getUserStreakData(days?: number) {
   const params = new URLSearchParams();
   if (days) params.append('days', days.toString());
-  
   const url = `${API_URL}/statistics/streak?${params.toString()}`;
   const res = await fetch(url, {
     method: "GET",
@@ -254,7 +243,8 @@ export async function getUserAchievements() {
   return handleResponse(res);
 }
 
-// Dashboard functions
+// ==== DASHBOARD ====
+
 export async function getDashboardStats() {
   const res = await fetch(`${API_URL}/dashboard/stats`, {
     method: "GET",
@@ -287,7 +277,8 @@ export async function getRatingDistribution() {
   return handleResponse(res);
 }
 
-// Reminders functions
+// ==== REMINDERS ====
+
 export async function getUserReminders(limit?: number) {
   const url = limit ? `${API_URL}/reminders?limit=${limit}` : `${API_URL}/reminders`;
   const res = await fetch(url, {
@@ -320,19 +311,21 @@ export async function getCalendarEvents(month?: number, year?: number) {
   if (month) params.append('month', month.toString());
   if (year) params.append('year', year.toString());
   if (params.toString()) url += `?${params.toString()}`;
-  
+
   const headers = getAuthHeaders();
+  
+  // Optional debugging logs
   console.log('🔐 Calendar API Headers:', headers);
   console.log('🔗 Calendar API URL:', url);
-  
+
   const res = await fetch(url, {
     method: "GET",
-    headers: headers,
+    headers,
   });
-  
+
   console.log('📡 Calendar API Response Status:', res.status);
   console.log('📡 Calendar API Response Headers:', [...res.headers.entries()]);
-  
+
   return handleResponse(res);
 }
 
